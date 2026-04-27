@@ -1,152 +1,51 @@
-# NotebookLM Workbench — Build Plan
+## Goal
 
-A web platform where your content team submits source materials (PDFs, URLs, YouTube links, text) and gets back NotebookLM-generated **slide decks (PPTX + PDF)**, **reports/study guides**, and **quizzes/flashcards** — without ever touching a Google login.
+Make `thedonut.ai@gmail.com` the real admin of the Workbench, replacing the temporary `admin@test.local` account. Keep the suspended `dev@test.local` user untouched.
 
-The platform is built in two pieces that talk to each other over a secure API.
+## What will happen
 
----
+1. **Delete the old test admin** (`admin@test.local`) from auth + profile + roles. Cascade rules already remove the linked `profiles` and `user_roles` rows when the auth user is deleted.
+2. **Pre-create your admin account** via an edge function call (using the service role key) so the user `thedonut.ai@gmail.com` exists with:
+   - `email_confirmed = true` (no verification email needed — auto-confirm is already on)
+   - A **temporary one-time password** that you'll use for your very first sign-in
+3. **Promote** that user to:
+   - `profiles.status = 'approved'`
+   - `user_roles.role = 'admin'`
+4. **Show you the temporary password** in chat, exactly once. You sign in at `/auth`, then immediately change it from a new "Account settings" link in the sidebar.
+5. **Add a small "Change password" page** at `/account` so you can rotate the temp password the moment you log in. Accessible to any signed-in approved user.
 
-## How it works (end-user view)
+## After this runs
 
-1. **Register** → account is created in `pending` state. User sees a "Waiting for admin approval" screen.
-2. **Admin approves** them from the Approvals tab → they get the **Content Developer** role and can log in.
-3. Developer creates a **Notebook**, uploads sources (PDFs, pastes URLs/YouTube links, types notes).
-4. Developer clicks **Generate** and picks outputs: Slide deck, Report, Quiz, Flashcards.
-5. Job appears in their **Jobs** queue with live status: `Queued → Running → Done` (or Failed with retry).
-6. When done, downloads (PPTX, PDF, MD, JSON) appear in the notebook and in the **Library**.
-7. Developer can publish a finished notebook to the **Team Library** so others can reuse it.
+- Sign in at `/auth` with:
+  - Email: `thedonut.ai@gmail.com`
+  - Password: *(the temp string I'll print in chat)*
+- You'll land on `/dashboard` as Admin.
+- Click your name in the sidebar → **Account** → set a real password.
+- `dev@test.local` stays in the Users list as a suspended developer (you can delete or re-enable later from `/admin/users`).
 
----
+## Technical details
 
-## Roles
+**Migration / data steps (run via tools, not committed as a schema migration):**
+- Use the database insert tool to:
+  ```sql
+  -- This will be executed via Supabase admin API, not raw SQL,
+  -- because we need to delete from auth.users (reserved schema)
+  ```
+- Actual deletion of `admin@test.local` and creation of `thedonut.ai@gmail.com` happens through a **one-shot admin script** invoked with the service role key (Lovable Cloud has access). Steps:
+  1. `supabase.auth.admin.deleteUser(<admin@test.local id>)` → cascades to `profiles` + `user_roles`.
+  2. `supabase.auth.admin.createUser({ email: 'thedonut.ai@gmail.com', password: <random 24-char>, email_confirm: true, user_metadata: { display_name: 'Admin' } })`.
+  3. The existing `handle_new_user()` trigger inserts a `profiles` row as `pending` + a `developer` role (since other users already exist).
+  4. Update that profile to `status='approved', approved_at=now()` and replace the role row with `'admin'`.
+- Print the generated temp password in chat for you to copy.
 
-- **Admin**
-  - Approves / rejects / suspends / re-enables users
-  - Sees all notebooks and jobs across the team
-  - Manages the Google account credentials used by the worker
-  - Sees worker health (online/offline, last heartbeat, queue depth)
-- **Content Developer**
-  - Creates notebooks, uploads sources, runs generations
-  - Owns a personal library; can publish to the Team Library
-  - Sees their own jobs and download history
+**New file:**
+- `src/pages/Account.tsx` — simple form calling `supabase.auth.updateUser({ password })`. Validates min 8 chars + confirmation field.
+- Route `/account` added to `App.tsx` behind `<ProtectedRoute>`.
+- Sidebar (`AppLayout.tsx`) — make the user-name area in the footer clickable, linking to `/account`.
 
-No email verification. Approval is fully manual by an admin.
+**No schema changes.** No edits to `client.ts`, `types.ts`, or `.env`.
 
----
+## Risks / notes
 
-## Screens
-
-1. **Auth**
-   - Sign up (email + password) → "Pending approval" screen
-   - Log in → blocked with same message until approved
-2. **Admin → Approvals** — pending users list with Approve / Reject buttons
-3. **Admin → Users** — all users, role chips, Suspend / Re-enable / Change role
-4. **Admin → Worker** — connection status, last heartbeat, Google account config, recent error log
-5. **Dashboard** — recent notebooks, recent jobs, quick "New Notebook" button
-6. **Notebook detail** — sources panel (add/remove), generation panel (pick outputs + settings), outputs panel (download links, regenerate)
-7. **Jobs queue** — all your jobs with live status, logs, retry/cancel
-8. **Library** — personal + team tabs, search, filter by output type, download
-
----
-
-## Worker hosting — Railway.app
-
-The Python worker (which actually drives NotebookLM via a headless browser) cannot run inside Lovable. It will be deployed to **Railway.app Hobby plan ($5/month)**:
-
-- One-click deploy from a GitHub repo
-- Dockerfile-based, includes Playwright + Chromium
-- Persistent volume to store the Google login cookies
-- Web UI for logs, restarts, env vars — no SSH or Linux admin needed
-- Auto-redeploys on git push
-
-You'll need:
-- A Railway account (free to create, $5/mo for Hobby)
-- A **dedicated Google account** for NotebookLM (don't use a personal one) — used once to log in and capture cookies
-- A GitHub account to host the worker repo (Railway pulls from there)
-
-Realistic monthly cost: **$5-8** for typical content-team usage.
-
----
-
-## Outputs in v1
-
-- **Slide decks** — PPTX (editable) + PDF
-- **Reports / study guides** — Markdown + PDF
-- **Quizzes** — JSON + printable HTML
-- **Flashcards** — JSON + printable HTML
-
-(Audio podcasts and video overviews deferred to v2 — they take much longer to generate and produce large files.)
-
----
-
-## Library
-
-- **Personal library** — every developer has their own; drafts and unpublished work live here
-- **Team library** — a shared space; developers publish finished notebooks here for everyone to reuse and download
-
----
-
-## Technical section (for reference)
-
-**Web app (Lovable Cloud)**
-- React + TypeScript + Tailwind + shadcn/ui frontend
-- Supabase Postgres for: `profiles`, `user_roles` (separate table, `app_role` enum), `notebooks`, `sources`, `jobs`, `outputs`, `library_items`, `worker_heartbeats`
-- Supabase Storage buckets: `sources` (uploads), `outputs` (generated files)
-- Edge functions: `jobs-next` (worker pulls next job), `jobs-update` (worker reports progress), `jobs-upload-output` (signed URL for asset upload), `admin-approve-user`, `admin-set-role`
-- Auth: email+password, signup creates profile in `pending` status, login gate checks status
-- RLS on every table; admin checks via `has_role(auth.uid(), 'admin')` security-definer function
-- Realtime subscription on `jobs` table for live status updates
-
-**Worker (Railway.app)**
-- Python 3.11 + `notebooklm-py` + Playwright + Chromium (in Docker)
-- Long-poll loop: calls `jobs-next` every 5s with a shared `WORKER_API_TOKEN`
-- For each job: downloads sources from signed URLs → runs notebooklm-py flow → uploads outputs via signed URLs → marks job done
-- Heartbeat ping every 30s to `worker-heartbeat` endpoint so admin sees it's alive
-- Persistent Railway volume at `/data` stores `google_cookies.json` (captured once via a one-time `login` command run from Railway shell)
-- Auto-restart on crash; failed jobs retried up to 3 times with exponential backoff
-
-**Data flow per job**
-```text
-Developer ──upload──▶ Storage (sources bucket)
-        ──submit──▶ jobs row (status=queued)
-                          │
-Worker ◀──poll── jobs-next (returns job + signed source URLs)
-   │
-   ├─ runs NotebookLM via browser
-   │
-   └──upload──▶ Storage (outputs bucket) ──▶ outputs rows
-                                          ──▶ jobs row (status=done)
-                          │
-Developer ◀──realtime── notification + download links
-```
-
-**Security**
-- Worker authenticates with a long-lived `WORKER_API_TOKEN` (rotatable from admin UI)
-- Google credentials never leave the Railway worker — web app never sees them
-- All storage access via short-lived signed URLs
-- Pending/suspended users blocked at the auth gate AND by RLS
-
----
-
-## What gets built in this implementation
-
-**In Lovable (this project):**
-1. Database schema + RLS policies + roles
-2. Auth + admin approval flow + pending/suspended gates
-3. All screens listed above
-4. Edge functions for the worker API
-5. Realtime job status updates
-6. Library (personal + team)
-
-**Deliverables for you to deploy separately:**
-1. A `worker/` folder with Python code, Dockerfile, and a `README` with step-by-step Railway setup (create account → connect GitHub → set env vars → deploy → run one-time Google login)
-2. A short admin guide (PDF/MD) on approving users, monitoring the worker, and rotating the Google account
-
----
-
-## Out of scope for v1
-- Audio/video outputs (podcasts, video overviews)
-- Multi-Google-account pooling (one worker = one Google account)
-- Reviewer role / approval workflow for generated content
-- Team workspaces / multi-tenant orgs
-- Billing / subscriptions
+- The temp password is shown in plain text in chat once. Change it immediately after first sign-in.
+- If you'd rather type your own password directly, say so and I'll instead just sign you up normally through the form and then promote your account — but that requires you to register in the UI first.
