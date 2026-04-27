@@ -78,14 +78,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <div className="px-4 py-3 border-t border-sidebar-border">
           <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <div className="text-sm font-medium truncate text-sidebar-accent-foreground">
+            <NavLink to="/account" className="min-w-0 flex-1 group">
+              <div className="text-sm font-medium truncate text-sidebar-accent-foreground group-hover:underline">
                 {profile?.display_name ?? profile?.email}
               </div>
               <div className="text-xs text-sidebar-foreground/60">
                 {isAdmin ? "Admin" : "Content Developer"}
               </div>
-            </div>
+            </NavLink>
             <Button
               variant="ghost"
               size="icon"
