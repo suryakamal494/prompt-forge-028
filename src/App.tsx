@@ -14,6 +14,7 @@ import Notebooks from "./pages/Notebooks";
 import NotebookDetail from "./pages/NotebookDetail";
 import Jobs from "./pages/Jobs";
 import LibraryPage from "./pages/LibraryPage";
+import Account from "./pages/Account";
 import Approvals from "./pages/admin/Approvals";
 import UsersAdmin from "./pages/admin/Users";
 import WorkerAdmin from "./pages/admin/Worker";
