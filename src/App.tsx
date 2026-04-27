@@ -39,6 +39,7 @@ const App = () => (
             <Route path="/notebooks/:id" element={<ProtectedRoute><NotebookDetail /></ProtectedRoute>} />
             <Route path="/jobs" element={<ProtectedRoute><Jobs /></ProtectedRoute>} />
             <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
+            <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
 
             <Route path="/admin/approvals" element={<ProtectedRoute requireAdmin><Approvals /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute requireAdmin><UsersAdmin /></ProtectedRoute>} />
