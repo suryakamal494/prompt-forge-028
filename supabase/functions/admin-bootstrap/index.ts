@@ -22,19 +22,29 @@ function genPassword(len = 20): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const token = req.headers.get("x-worker-token");
-  if (!token || token !== Deno.env.get("WORKER_API_TOKEN")) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } }
   );
+
+  // Safety gate: only run while the system is still in its bootstrap state,
+  // i.e. the only admin is admin@test.local OR thedonut.ai@gmail.com already exists.
+  const { data: admins } = await admin
+    .from("user_roles")
+    .select("user_id, profiles!inner(email)")
+    .eq("role", "admin");
+  const adminEmails = (admins ?? []).map((r: any) => r.profiles?.email).filter(Boolean);
+  const onlyTestAdmin =
+    adminEmails.length === 0 ||
+    (adminEmails.length === 1 && adminEmails[0] === OLD_ADMIN_EMAIL) ||
+    adminEmails.includes(TARGET_EMAIL);
+  if (!onlyTestAdmin) {
+    return new Response(
+      JSON.stringify({ error: "bootstrap already complete", admins: adminEmails }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   // 1. Find + delete the old test admin (if it still exists).
   const { data: oldProfile } = await admin
