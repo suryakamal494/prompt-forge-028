@@ -205,7 +205,7 @@ async def run_notebooklm_async(payload: dict, on_progress) -> tuple[list[dict], 
                 remote_id = None
         if not remote_id:
             nb = await client.notebooks.create(title=notebook.get("title") or "Untitled")
-            remote_id = getattr(nb, "id", None) or nb["id"]
+            remote_id = getattr(nb, "id", None) or (nb.get("id") if isinstance(nb, dict) else None)
         log(f"Using remote notebook {remote_id}")
 
         # ---- 2. Sources ----
