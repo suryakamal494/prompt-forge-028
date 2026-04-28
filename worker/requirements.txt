@@ -1,3 +1,7 @@
+# Runtime deps (Railway)
 requests>=2.32
 notebooklm-py>=0.3.4,<0.4
+
+# Local-only (only needed when you run `python login.py` on your laptop).
+# Safe to leave here — pip on Railway will install it but it isn't used at runtime.
 playwright>=1.47
