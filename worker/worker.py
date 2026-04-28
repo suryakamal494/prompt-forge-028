@@ -111,10 +111,22 @@ def upload_output(job_id: str, kind: str, filename: str, content: bytes, mime_ty
 # ---------------------------------------------------------------------------
 
 def ensure_cookies() -> None:
-    if not Path(COOKIE_PATH).exists():
-        log(f"FATAL: cookie file not found at {COOKIE_PATH}.")
-        log("Run `python login.py` once on this machine to capture Google cookies.")
-        sys.exit(1)
+    """Make sure a cookie file exists locally. If not, try downloading the
+    most recent cookies uploaded via the admin UI."""
+    if Path(COOKIE_PATH).exists():
+        return
+    log("Cookie file missing — fetching from worker-cookie-download…")
+    try:
+        r = requests.get(f"{FUNCTIONS_URL}/worker-cookie-download", headers=HEADERS, timeout=30)
+        if r.status_code == 200:
+            Path(COOKIE_PATH).parent.mkdir(parents=True, exist_ok=True)
+            Path(COOKIE_PATH).write_text(r.text)
+            log(f"Downloaded cookies to {COOKIE_PATH}")
+            return
+        log(f"No cookies available yet (HTTP {r.status_code}). Upload from Admin → Worker → Cookie tab.")
+    except Exception as e:
+        log(f"Cookie download failed: {e}")
+    sys.exit(1)
 
 
 def run_notebooklm(job: dict) -> list[dict]:
