@@ -14,15 +14,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Trash2, Upload, Loader2, Sparkles, Globe, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
+// Only outputs the worker actually produces. Other DB enum values exist
+// (slides_pdf, report_*, quiz_*, flashcards_html) but are intentionally hidden
+// from the picker until the worker supports them.
 const OUTPUT_OPTIONS: { value: string; label: string; group: string }[] = [
   { value: "slides_pptx", label: "Slide deck (PPTX)", group: "Slides" },
-  { value: "slides_pdf", label: "Slide deck (PDF)", group: "Slides" },
-  { value: "report_md", label: "Study guide (Markdown)", group: "Reports" },
-  { value: "report_pdf", label: "Study guide (PDF)", group: "Reports" },
-  { value: "quiz_json", label: "Quiz (JSON)", group: "Quizzes" },
-  { value: "quiz_html", label: "Quiz (printable HTML)", group: "Quizzes" },
   { value: "flashcards_json", label: "Flashcards (JSON)", group: "Flashcards" },
-  { value: "flashcards_html", label: "Flashcards (printable HTML)", group: "Flashcards" },
 ];
 
 export default function NotebookDetail() {
@@ -32,7 +29,7 @@ export default function NotebookDetail() {
   const [sources, setSources] = useState<any[]>([]);
   const [outputs, setOutputs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [picked, setPicked] = useState<string[]>(["slides_pptx", "slides_pdf"]);
+  const [picked, setPicked] = useState<string[]>(["slides_pptx", "flashcards_json"]);
   const [submitting, setSubmitting] = useState(false);
   const [workerOnline, setWorkerOnline] = useState<boolean | null>(null);
 
