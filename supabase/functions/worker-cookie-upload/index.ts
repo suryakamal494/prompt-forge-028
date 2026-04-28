@@ -50,14 +50,23 @@ Deno.serve(async (req) => {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const { cookies } = body as { cookies?: unknown };
-  if (!Array.isArray(cookies) || cookies.length === 0) {
-    return new Response(JSON.stringify({ error: "cookies must be a non-empty array" }), {
+  // Accept either a Playwright storage_state object ({cookies:[...], origins:[...]})
+  // or a bare cookie array (legacy). Normalize to a storage_state object so
+  // notebooklm-py's AuthTokens.from_storage(...) can read it directly.
+  const { storage_state, cookies } = body as { storage_state?: unknown; cookies?: unknown };
+  let payload: { cookies: unknown[]; origins: unknown[] };
+  if (storage_state && typeof storage_state === "object" && Array.isArray((storage_state as any).cookies)) {
+    const ss = storage_state as { cookies: unknown[]; origins?: unknown[] };
+    payload = { cookies: ss.cookies, origins: Array.isArray(ss.origins) ? ss.origins : [] };
+  } else if (Array.isArray(cookies) && cookies.length > 0) {
+    payload = { cookies, origins: [] };
+  } else {
+    return new Response(JSON.stringify({ error: "expected storage_state object with a cookies array" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  const json = JSON.stringify(cookies, null, 2);
+  const json = JSON.stringify(payload, null, 2);
   const { error: upErr } = await admin.storage
     .from("worker-cookies")
     .upload("current.json", new Blob([json], { type: "application/json" }), {
@@ -71,7 +80,7 @@ Deno.serve(async (req) => {
   }
 
   return new Response(
-    JSON.stringify({ ok: true, cookie_count: cookies.length, uploaded_at: new Date().toISOString() }),
+    JSON.stringify({ ok: true, cookie_count: payload.cookies.length, uploaded_at: new Date().toISOString() }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });

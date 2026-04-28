@@ -59,41 +59,31 @@ worker/
    | `SUPABASE_FUNCTIONS_URL` | `https://<your-project>.functions.supabase.co` |
    | `WORKER_API_TOKEN` | (the same secret saved in Workbench) |
    | `WORKER_ID` | `railway-1` (any short label) |
-   | `COOKIE_PATH` | `/data/google_cookies.json` |
+   | `COOKIE_PATH` | `/data/google_storage_state.json` |
    | `POLL_INTERVAL` | `5` |
 
 4. Open **Settings → Volumes** → click **+ New Volume**, mount path **`/data`**, size **1 GB**.
    (This is where the Google login cookies are persisted between restarts.)
 
-5. The service will keep restarting because `google_cookies.json` doesn't exist yet — that's expected. Move to step 3.
+5. The service will keep restarting until you upload a login cookie — that's expected. Move to step 3.
 
 ---
 
-## Step 3 — Capture the Google login cookie (one-time)
+## Step 3 — Capture the Google login (one-time)
 
-Railway lets you open a shell into a running container. Because Chromium
-needs a screen to log in, we use a small trick: run `login.py` from your
-**local machine** instead, then upload the cookie file to the Railway volume.
-
-### Option A (easiest): run locally, then upload
-
-On your laptop:
+Run `login.py` on your **local machine** (it needs a real browser window to sign into Google), then upload the resulting file via the Workbench admin UI.
 
 ```bash
 git clone <your-fork-url> notebooklm-worker
 cd notebooklm-worker
 pip install -r requirements.txt
 python -m playwright install chromium
-COOKIE_PATH=./google_cookies.json python login.py
+python login.py
 ```
 
-A real Chrome window opens. Sign in to your dedicated Google account, wait
-until NotebookLM home loads, then go back to the terminal and press **Enter**.
-A `google_cookies.json` file appears.
+A real Chromium window opens. Sign in to your dedicated Google account, open NotebookLM, wait for the home page, then return to the terminal and press **Enter**. A `google_storage_state.json` file appears.
 
-Now upload that file to Railway:
-- Open Railway → service → **Volumes** tab → **Browse files** → upload
-  `google_cookies.json` to `/data/google_cookies.json`.
+Upload it via **Workbench → Admin → Worker → Cookie tab → Upload**. The worker will pull it down on its next restart.
 
 Restart the service. The logs should now show:
 
@@ -141,7 +131,7 @@ re-upload to the volume.
 
 | Symptom | Fix |
 |---|---|
-| `cookie file not found` on startup | You skipped Step 3. Upload `google_cookies.json` to `/data` on the Railway volume. |
+| `cookie file not found` on startup | You skipped Step 3. Run `python login.py` locally and upload the resulting `google_storage_state.json` via Admin → Worker → Cookie. |
 | Worker shows **Offline** in admin | Check Railway logs. Most common cause: wrong `SUPABASE_FUNCTIONS_URL` or `WORKER_API_TOKEN`. |
 | Job stuck in **Running** | Open Railway logs to see the Playwright trace. Often a NotebookLM UI change — update `notebooklm-py`: `pip install -U notebooklm-py` and redeploy. |
 | Out of memory crashes | Settings → Resources → bump to 2 GB. |
