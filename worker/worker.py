@@ -231,7 +231,7 @@ async def run_notebooklm_async(payload: dict, on_progress) -> tuple[list[dict], 
                     else:
                         log(f"Skipping unsupported source: {s.get('id')} kind={kind}")
                         continue
-                    sid = getattr(src, "id", None) or src.get("id")
+                    sid = getattr(src, "id", None) or (src.get("id") if isinstance(src, dict) else None)
                     if sid:
                         source_ids.append(sid)
                 except Exception as e:
