@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Trash2, Upload, Loader2, Sparkles, Globe } from "lucide-react";
+import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Trash2, Upload, Loader2, Sparkles, Globe, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 const OUTPUT_OPTIONS: { value: string; label: string; group: string }[] = [
@@ -34,10 +34,21 @@ export default function NotebookDetail() {
   const [loading, setLoading] = useState(true);
   const [picked, setPicked] = useState<string[]>(["slides_pptx", "slides_pdf"]);
   const [submitting, setSubmitting] = useState(false);
+  const [workerOnline, setWorkerOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (id) load();
   }, [id]);
+
+  useEffect(() => {
+    const check = async () => {
+      const { data } = await supabase.functions.invoke("worker-status");
+      setWorkerOnline((data as any)?.online ?? false);
+    };
+    check();
+    const i = setInterval(check, 20000);
+    return () => clearInterval(i);
+  }, []);
 
   const load = async () => {
     if (!id) return;
@@ -275,6 +286,15 @@ export default function NotebookDetail() {
                 </div>
               </label>
             ))}
+            {workerOnline === false && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  No worker is online. Your job will queue but won't run until an admin starts the
+                  Railway worker.
+                </span>
+              </div>
+            )}
             <Button
               className="w-full bg-gradient-brand shadow-elegant"
               onClick={submitJob}
