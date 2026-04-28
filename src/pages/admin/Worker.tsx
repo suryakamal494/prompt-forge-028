@@ -188,7 +188,7 @@ function SetupTab() {
             )}
           </div>
           <CopyRow label="WORKER_ID" value="railway-1" />
-          <CopyRow label="COOKIE_PATH" value="/data/google_cookies.json" />
+          <CopyRow label="COOKIE_PATH" value="/data/google_storage_state.json" />
           <CopyRow label="POLL_INTERVAL" value="5" />
         </CardContent>
       </Card>
@@ -235,23 +235,26 @@ function CookieTab() {
 
   const handleFile = async (file: File) => {
     if (!file.name.endsWith(".json")) {
-      toast.error("Please upload a .json file exported from the Chrome cookie extension.");
+      toast.error("Please upload a .json file (the storage_state.json from login.py).");
       return;
     }
-    let parsed: unknown;
+    let parsed: any;
     try {
       parsed = JSON.parse(await file.text());
     } catch {
       toast.error("That file is not valid JSON.");
       return;
     }
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      toast.error("Cookie file must be a JSON array.");
+    // Accept Playwright storage_state ({cookies, origins}) or a bare cookie array.
+    const isStorageState = parsed && typeof parsed === "object" && Array.isArray(parsed.cookies);
+    const isBareArray = Array.isArray(parsed);
+    if (!isStorageState && !isBareArray) {
+      toast.error("Expected a storage_state.json (with a 'cookies' array) or a JSON cookie array.");
       return;
     }
     setBusy(true);
     const { data, error } = await supabase.functions.invoke("worker-cookie-upload", {
-      body: { cookies: parsed },
+      body: isStorageState ? { storage_state: parsed } : { cookies: parsed },
     });
     setBusy(false);
     if (error) {
@@ -267,30 +270,33 @@ function CookieTab() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="font-serif text-xl">How to capture the cookie</CardTitle>
-          <CardDescription>5 minutes, no Python install needed.</CardDescription>
+          <CardTitle className="font-serif text-xl">How to capture the login</CardTitle>
+          <CardDescription>Run the included <code>login.py</code> script once on your laptop.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <ol className="list-decimal pl-5 space-y-2">
             <li>
-              In Chrome, install the extension <a className="underline" target="_blank" rel="noreferrer" href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc">
-                "Get cookies.txt LOCALLY" <ExternalLink className="inline h-3 w-3" />
-              </a>.
+              Clone the worker repo and install deps:
+              <pre className="mt-1 rounded bg-muted/40 p-2 text-xs overflow-x-auto">{`pip install -r requirements.txt
+python -m playwright install chromium`}</pre>
             </li>
             <li>
-              Open <a className="underline" target="_blank" rel="noreferrer" href="https://notebooklm.google.com">notebooklm.google.com</a> and sign in with the Gmail account you want the worker to use.
+              Run <code>python login.py</code>. A Chromium window opens.
             </li>
             <li>
-              Click the extension icon → <strong>Format: JSON</strong> → <strong>Export</strong>. Save the file.
+              Sign into the Google account you want the worker to use, open <a className="underline" target="_blank" rel="noreferrer" href="https://notebooklm.google.com">notebooklm.google.com</a>, wait for the home page to load.
             </li>
             <li>
-              Drag the file into the box below, or click to browse.
+              Return to the terminal and press <strong>Enter</strong>. A <code>google_storage_state.json</code> file is written.
+            </li>
+            <li>
+              Drag that file into the box below.
             </li>
           </ol>
           <div className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
             <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
-              The cookie is uploaded to a private bucket only the admin and the worker can read.
+              The file is uploaded to a private bucket only the admin and the worker can read.
               Re-upload whenever Google makes you sign in again (usually every few weeks).
             </div>
           </div>
@@ -299,8 +305,8 @@ function CookieTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-serif text-xl">Upload google_cookies.json</CardTitle>
-          <CardDescription>Drag a file or click to browse.</CardDescription>
+          <CardTitle className="font-serif text-xl">Upload google_storage_state.json</CardTitle>
+          <CardDescription>Drag the file produced by <code>login.py</code>, or click to browse.</CardDescription>
         </CardHeader>
         <CardContent>
           <Label
@@ -318,8 +324,8 @@ function CookieTab() {
             ) : (
               <>
                 <Upload className="h-6 w-6 text-muted-foreground mb-2" />
-                <span className="text-sm">Drop cookies.json here, or click to browse</span>
-                <span className="text-xs text-muted-foreground mt-1">JSON exported from the Chrome extension</span>
+                <span className="text-sm">Drop google_storage_state.json here, or click to browse</span>
+                <span className="text-xs text-muted-foreground mt-1">JSON produced by <code>python login.py</code></span>
               </>
             )}
             <Input
