@@ -106,22 +106,58 @@ def upload_output(job_id: str, kind: str, filename: str,
 # Cookie bootstrap
 # ---------------------------------------------------------------------------
 
+def _normalize_storage_state(raw: bytes) -> bytes:
+    """Coerce the cookie file into Playwright storage_state shape.
+
+    notebooklm-py's `extract_cookies_from_storage` calls `.get("cookies", [])`
+    on the parsed JSON, so it MUST be a dict like `{"cookies": [...], "origins": [...]}`.
+    Older uploads (or hand-edited files) may be a bare cookies list — wrap them.
+    """
+    try:
+        data = json.loads(raw)
+    except Exception as e:
+        raise RuntimeError(f"Cookie file is not valid JSON: {e}")
+    if isinstance(data, list):
+        data = {"cookies": data, "origins": []}
+    elif isinstance(data, dict):
+        if "cookies" not in data or not isinstance(data.get("cookies"), list):
+            raise RuntimeError(
+                "Cookie file is a JSON object but has no 'cookies' array. "
+                "Expected a Playwright storage_state.json."
+            )
+        data.setdefault("origins", [])
+    else:
+        raise RuntimeError("Cookie file must be a JSON object or array.")
+    return json.dumps(data).encode("utf-8")
+
+
 def ensure_cookies() -> None:
-    if Path(COOKIE_PATH).exists():
-        return
-    log("Cookie file missing — fetching from worker-cookie-download…")
+    """Always fetch the latest cookie file from the backend and normalize it.
+
+    We re-download every startup so the worker stays in sync with whatever
+    the admin uploaded most recently, and so we can fix any legacy/malformed
+    files left on the persistent volume.
+    """
+    log("Fetching cookies from worker-cookie-download…")
     try:
         r = requests.get(f"{FUNCTIONS_URL}/worker-cookie-download",
                          headers=HEADERS, timeout=30)
         if r.status_code == 200:
             Path(COOKIE_PATH).parent.mkdir(parents=True, exist_ok=True)
-            Path(COOKIE_PATH).write_bytes(r.content)
-            log(f"Downloaded cookies to {COOKIE_PATH}")
+            normalized = _normalize_storage_state(r.content)
+            Path(COOKIE_PATH).write_bytes(normalized)
+            log(f"Wrote normalized storage_state to {COOKIE_PATH}")
+            return
+        if r.status_code == 404 and Path(COOKIE_PATH).exists():
+            # No upload yet, but we have a local copy — try to normalize it.
+            log("No cookies on backend; using and normalizing local file.")
+            local = Path(COOKIE_PATH).read_bytes()
+            Path(COOKIE_PATH).write_bytes(_normalize_storage_state(local))
             return
         log(f"No cookies yet (HTTP {r.status_code}). "
             f"Upload your storage_state.json via Admin → Worker → Cookie.")
     except Exception as e:
-        log(f"Cookie download failed: {e}")
+        log(f"Cookie bootstrap failed: {e}")
     sys.exit(1)
 
 
@@ -169,7 +205,7 @@ async def run_notebooklm_async(payload: dict, on_progress) -> tuple[list[dict], 
                 remote_id = None
         if not remote_id:
             nb = await client.notebooks.create(title=notebook.get("title") or "Untitled")
-            remote_id = getattr(nb, "id", None) or nb["id"]
+            remote_id = getattr(nb, "id", None) or (nb.get("id") if isinstance(nb, dict) else None)
         log(f"Using remote notebook {remote_id}")
 
         # ---- 2. Sources ----
@@ -195,7 +231,7 @@ async def run_notebooklm_async(payload: dict, on_progress) -> tuple[list[dict], 
                     else:
                         log(f"Skipping unsupported source: {s.get('id')} kind={kind}")
                         continue
-                    sid = getattr(src, "id", None) or src.get("id")
+                    sid = getattr(src, "id", None) or (src.get("id") if isinstance(src, dict) else None)
                     if sid:
                         source_ids.append(sid)
                 except Exception as e:
