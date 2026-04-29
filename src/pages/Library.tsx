@@ -78,7 +78,11 @@ export default function Library() {
     if (tab === "mine" && user?.id) q = q.eq("owner_id", user.id);
     if (fClass !== "all") q = q.eq("class_level", Number(fClass));
     if (fSubject !== "all") q = q.eq("subject", fSubject);
-    if (dChapter) q = q.ilike("chapter", `%${dChapter}%`);
+    if (dChapter) {
+      // Exact match when the dropdown is in use; substring search otherwise.
+      if (fClass !== "all" && fSubject !== "all") q = q.eq("chapter", dChapter);
+      else q = q.ilike("chapter", `%${dChapter}%`);
+    }
     if (fType !== "all") q = q.eq("content_type", fType as ContentType);
     if (dSearch) q = q.ilike("title", `%${dSearch}%`);
     return q;
@@ -229,7 +233,17 @@ export default function Library() {
               {subjects.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Input placeholder="Chapter contains…" value={fChapter} onChange={(e) => setFChapter(e.target.value)} />
+          {useChapterDropdown ? (
+            <Select value={fChapter || "all"} onValueChange={(v) => setFChapter(v === "all" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Chapter" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All chapters</SelectItem>
+                {chapterOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input placeholder="Chapter contains…" value={fChapter} onChange={(e) => setFChapter(e.target.value)} />
+          )}
           <Select value={fType} onValueChange={setFType}>
             <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
             <SelectContent>
