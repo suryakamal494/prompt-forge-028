@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useNotebookLMEnabled } from "@/hooks/useAppSettings";
 import {
   LayoutDashboard,
   BookOpen,
@@ -11,6 +12,8 @@ import {
   Server,
   LogOut,
   Sparkles,
+  Upload,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,23 +23,31 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   adminOnly?: boolean;
+  notebookLM?: boolean;
 }
 
 const items: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/notebooks", label: "Notebooks", icon: BookOpen },
-  { to: "/jobs", label: "Jobs", icon: ListChecks },
   { to: "/library", label: "Library", icon: Library },
+  { to: "/upload", label: "Upload", icon: Upload },
+  { to: "/notebooks", label: "Notebooks", icon: BookOpen, notebookLM: true },
+  { to: "/jobs", label: "Jobs", icon: ListChecks, notebookLM: true },
   { to: "/admin/approvals", label: "Approvals", icon: ShieldCheck, adminOnly: true },
   { to: "/admin/users", label: "Users", icon: Users, adminOnly: true },
   { to: "/admin/worker", label: "Worker", icon: Server, adminOnly: true },
+  { to: "/admin/settings", label: "Settings", icon: SettingsIcon, adminOnly: true },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  const { value: nblmEnabled } = useNotebookLMEnabled();
 
-  const visible = items.filter((i) => !i.adminOnly || isAdmin);
+  const visible = items.filter((i) => {
+    if (i.adminOnly && !isAdmin) return false;
+    if (i.notebookLM && !nblmEnabled && !isAdmin) return false;
+    return true;
+  });
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -48,7 +59,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
             <div>
               <div className="font-serif text-base font-semibold text-sidebar-accent-foreground">Workbench</div>
-              <div className="text-xs text-sidebar-foreground/60 -mt-0.5">NotebookLM Studio</div>
+              <div className="text-xs text-sidebar-foreground/60 -mt-0.5">Content Library</div>
             </div>
           </div>
         </div>
@@ -71,6 +82,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {item.label}
               {item.adminOnly && (
                 <span className="ml-auto text-[10px] uppercase tracking-wider text-sidebar-foreground/50">admin</span>
+              )}
+              {item.notebookLM && !nblmEnabled && (
+                <span className="ml-auto text-[10px] uppercase tracking-wider text-sidebar-foreground/50">off</span>
               )}
             </NavLink>
           ))}

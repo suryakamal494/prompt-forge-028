@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      content_items: {
+        Row: {
+          bytes: number | null
+          chapter: string
+          class_level: number
+          content_type: Database["public"]["Enums"]["content_kind"]
+          created_at: string
+          id: string
+          mime_type: string | null
+          owner_id: string
+          storage_path: string
+          subject: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          bytes?: number | null
+          chapter: string
+          class_level: number
+          content_type: Database["public"]["Enums"]["content_kind"]
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          owner_id: string
+          storage_path: string
+          subject: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          bytes?: number | null
+          chapter?: string
+          class_level?: number
+          content_type?: Database["public"]["Enums"]["content_kind"]
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          owner_id?: string
+          storage_path?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       jobs: {
         Row: {
           attempts: number
@@ -305,6 +371,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "developer"
+      content_kind: "pptx" | "pdf" | "flashcards_json" | "image" | "other"
       job_status: "queued" | "running" | "done" | "failed" | "cancelled"
       output_kind:
         | "slides_pptx"
@@ -445,6 +512,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "developer"],
+      content_kind: ["pptx", "pdf", "flashcards_json", "image", "other"],
       job_status: ["queued", "running", "done", "failed", "cancelled"],
       output_kind: [
         "slides_pptx",

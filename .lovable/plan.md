@@ -1,69 +1,160 @@
 ## Goal
 
-Fix the worker so it can actually drive `notebooklm-py` (v0.3.4). The previous `worker.py` invented an API that doesn't exist; we will rewrite it against the real one.
+Pivot the app to a **manual content library** for CBSE Classes 5–8. Employees upload finished assets tagged Class → Subject → Chapter → Title → Content Type. The old NotebookLM auto-generation flow is kept in code but **hidden behind an admin feature flag** so we can re-enable it later.
 
-## What was wrong
+## Permissions matrix
 
-The old code did `from notebooklm import NotebookLM` and called methods like `nlm.create_notebook()`, `nlm.generate_slides_pptx()`. None of those exist.
+| Action            | Owner (employee) | Other employee | Admin |
+|-------------------|:----------------:|:--------------:|:-----:|
+| See item in library | ✅            | ✅ (read-only) | ✅    |
+| Preview in browser  | ✅            | ✅             | ✅    |
+| Edit metadata       | ✅            | ❌             | ✅    |
+| Replace file        | ✅            | ❌             | ✅    |
+| Download original   | ❌            | ❌             | ✅    |
+| Delete              | ✅            | ❌             | ✅    |
 
-The real library exposes:
-- `NotebookLMClient(auth=AuthTokens, timeout=30.0)` as the entry point
-- Sub-APIs hung off the client: `client.notebooks`, `client.sources`, `client.artifacts`, `client.chat`
-- Async generation: each `generate_*` returns a `GenerationStatus` with a `task_id`; you then call `artifacts.wait_for_completion(notebook_id, task_id)` and finally `artifacts.download_*(notebook_id, output_path, artifact_id)` to get the file.
-- Auth is built from a Playwright `storage_state.json` via `auth.AuthTokens.from_storage(path)` — NOT a raw cookies JSON. This is important: the cookie file the user uploads must be a Playwright storage state, which is what `worker/login.py` already produces.
+## CBSE curriculum (hardcoded, editable in `src/lib/curriculum.ts`)
 
-## Real artifact mapping
+- **Class 5**: English, Hindi, Mathematics, EVS, General Knowledge, Computer Science
+- **Class 6**: English, Hindi, Mathematics, Science, Social Science, Sanskrit, Computer Science
+- **Class 7**: English, Hindi, Mathematics, Science, Social Science, Sanskrit, Computer Science
+- **Class 8**: English, Hindi, Mathematics, Science, Social Science, Sanskrit, Computer Science
 
-| User-requested output | notebooklm-py call | Download method | Output format |
-|---|---|---|---|
-| `slides_pptx` | `generate_slide_deck(...)` | `download_slide_deck(..., output_format="pptx")` | .pptx |
-| `slides_pdf` | `generate_slide_deck(...)` | `download_slide_deck(..., output_format="pdf")` | .pdf |
-| `report_md` / `report_pdf` | `generate_report(report_format=BRIEFING_DOC)` | `download_report(...)` | provider-defined; we wrap to .md / .pdf |
-| `quiz_json` | `generate_quiz(...)` | `download_quiz(..., output_format="json")` | .json |
-| `quiz_html` | same quiz | render JSON → HTML in worker | .html |
-| `flashcards_json` | `generate_flashcards(...)` | `download_flashcards(..., output_format="json")` | .json |
-| `flashcards_html` | same flashcards | render JSON → HTML in worker | .html |
-| (bonus, free) `mind_map` | `generate_mind_map(...)` returns dict directly | n/a | .json |
-| (bonus) `audio_overview` | `generate_audio(...)` + `download_audio(...)` | | .mp3 |
+## Database changes
 
-We will keep the worker focused on the outputs the UI already requests; bonus items can come later.
+### New table `content_items`
 
-## Changes
+```
+id              uuid PK
+owner_id        uuid not null
+class_level     int  not null (5..8)
+subject         text not null
+chapter         text not null
+title           text not null
+content_type    enum('pptx','pdf','flashcards_json','image','other')
+storage_path    text not null
+mime_type       text
+bytes           int
+created_at      timestamptz
+updated_at      timestamptz
+```
 
-### 1. Rewrite `worker/worker.py`
-- Replace the fake `NotebookLM(...)` driver with a `NotebookLMClient` built from `AuthTokens.from_storage(COOKIE_PATH)`.
-- Implement `run_notebooklm(job)` against the real API:
-  1. Create or reuse a notebook (`client.notebooks.create(title)` or `client.notebooks.get(remote_id)`).
-  2. Add each source via `sources.add_file(...)` (PDFs we download from the signed URL to a temp file first), `sources.add_url(...)`, `sources.add_text(...)` — passing `wait=True` so processing finishes before generation.
-  3. For each requested output: kick off the matching `generate_*`, then `artifacts.wait_for_completion(...)`, then `download_*` into a temp file, then read bytes and append to the artifacts list.
-  4. Update `progress` between steps (10 → 30 sources, 30 → 80 generation, 80 → 100 upload).
-- Keep the same upload-to-Supabase flow (it already works).
-- Keep the same heartbeat / polling loop.
-- Because `AuthTokens.from_storage` is async, we will run the driver inside a small `asyncio.run(...)` per job (simplest, no event-loop churn).
+Indexes on `(class_level, subject, chapter)` and `owner_id`.
 
-### 2. Adjust the cookie expectations
-- Update `worker/README.md` and the in-app `Admin → Worker → Cookie` description to say "upload your Playwright `storage_state.json` produced by `python login.py`" (instead of "Google cookies JSON"). The file format is the same one we already produce — we just need the wording correct so the user doesn't try to paste a browser-extension cookie export.
-- No code change in the cookie upload edge function — it already stores whatever JSON is uploaded.
+### RLS on `content_items`
 
-### 3. Pin `notebooklm-py` to a known-good version
-- Change `worker/requirements.txt` from `notebooklm-py>=0.1.0` to `notebooklm-py>=0.3.4,<0.4` so Railway installs the version we built against.
+- `owner_write`: owner can INSERT/UPDATE/DELETE own rows.
+- `team_read`: any approved user can SELECT all rows (read-only collaboration).
+- `admin_all`: admins via `has_role` get full access.
 
-### 4. No database changes, no edge function changes, no UI changes required.
+### New table `app_settings` (key/value, single row pattern)
 
-## How the user verifies after we ship
+```
+key   text PK
+value jsonb
+updated_at timestamptz
+updated_by uuid
+```
 
-1. Railway will auto-redeploy on push (~2 min).
-2. Open **Admin → Worker** — the heartbeat should refresh within 30 s.
-3. Re-queue the same PDF job. Expected timeline:
-   - `queued` → `running` within ~10 s
-   - `progress 10–30%` while the PDF is being uploaded to NotebookLM (~30–60 s)
-   - `progress 30–80%` while NotebookLM generates the slide deck (~2–5 min)
-   - `progress 80–100%` while the .pptx is uploaded to our storage (~10 s)
-   - `done` — the slides appear in the notebook.
-4. If it fails, the error message shown in the UI will be a real `notebooklm-py` exception (e.g. `AuthError`, `RateLimitError`, `SourceTimeoutError`) and we can act on it specifically.
+Seed row: `('notebooklm_enabled', 'false')`. Only admins can read/update.
 
-## Honest caveats
+### Storage bucket `content-library` (private)
 
-- This depends on an unofficial library that scrapes Google. It can break when Google changes things.
-- Generation is genuinely slow (Google-side), especially for slide decks and audio — minutes, not seconds.
-- The cookie expires periodically; when it does, jobs will fail with `AuthError` and the user re-runs `python login.py` and re-uploads the storage state.
+Storage RLS:
+- INSERT: authenticated; path must start with `{auth.uid()}/`.
+- SELECT: any approved authenticated user (so previews work for everyone).
+- UPDATE/DELETE: owner of the path or admin.
+
+Download protection is enforced at the **UI layer** — non-admins never see a download button and we don't expose signed URLs to them outside of the embedded preview.
+
+## Frontend changes
+
+### Sidebar (`AppLayout.tsx`)
+
+Always visible:
+- Dashboard
+- **Library** (new content library)
+- **Upload** (approved users)
+- Account
+
+Conditionally visible:
+- **Notebooks**, **Jobs** — only if `notebooklm_enabled = true` OR user is admin (admins always see them so they can re-enable).
+- Admin: Approvals, Users, Worker, **Settings** (new).
+
+### `/upload` (new page)
+
+Single-file form. **One file per submission** (no batch).
+
+Fields:
+- Class (5–8 select)
+- Subject (filtered by class)
+- Chapter (combobox — pick from existing chapters for that class+subject, or type new)
+- Title (text)
+- Content type (PPTX / PDF / Flashcards JSON / Image / Other) — also constrains accepted file extension
+- File picker (50 MB cap)
+
+On submit: upload to `content-library/{user.id}/{uuid}-{filename}`, insert `content_items`, redirect to `/library`.
+
+### `/library` (rewritten)
+
+Filter bar (sticky):
+- Class · Subject · Chapter · Content type · Owner (admin only) · free-text search on title.
+- Tabs: **All** (everyone, read-only for non-owners) and **Mine** (only my uploads).
+
+Grid of cards:
+- Title, content-type badge, `Class N · Subject · Chapter`, uploader name, created date.
+- Buttons:
+  - **Preview** — everyone.
+  - **Edit** — owner + admin.
+  - **Replace file** — owner + admin.
+  - **Download** — admin only.
+  - **Delete** — owner + admin.
+
+### `ContentPreview` dialog
+
+- **PPTX** → embed via Office Online viewer using a short-lived signed URL: `https://view.officeapps.live.com/op/embed.aspx?src=<encoded signed url>`.
+- **PDF** → `<iframe>` of the signed URL.
+- **Image** → `<img>`.
+- **Flashcards JSON** → simple in-app flip-card viewer.
+
+### `/admin/settings` (new admin page)
+
+Toggle: **"Enable NotebookLM auto-generation"**. When off:
+- Sidebar hides Notebooks/Jobs for non-admins.
+- `NotebookDetail` "Queue job" button is disabled with a notice.
+- New notebook creation is hidden.
+
+Admins can flip it back on at any time. All existing NotebookLM code, worker, edge functions, tables stay intact.
+
+### Dashboard
+
+Stat cards: **My uploads**, **Library total**, **Subjects covered**.
+Quick CTA: "Upload content".
+
+## Files
+
+**New**
+- `src/lib/curriculum.ts`
+- `src/hooks/useAppSettings.ts` — fetches `notebooklm_enabled`, cached.
+- `src/pages/Upload.tsx`
+- `src/pages/Library.tsx` (replaces `LibraryPage.tsx`)
+- `src/pages/admin/Settings.tsx`
+- `src/components/ContentPreview.tsx`
+- `src/components/ChapterCombobox.tsx`
+
+**Edited**
+- `src/App.tsx` — add `/upload`, `/admin/settings`; point `/library` to new page.
+- `src/components/AppLayout.tsx` — new nav, gate Notebooks/Jobs by feature flag.
+- `src/pages/Dashboard.tsx` — new stats and CTAs.
+- `src/pages/NotebookDetail.tsx` — disable "Queue job" when flag off.
+
+**Migrations**
+- Create `content_kind` enum, `content_items` table + RLS + indexes.
+- Create `app_settings` table + RLS (admin only) + seed row.
+- Create `content-library` storage bucket + storage policies.
+
+## Out of scope
+
+- True download-blocking for PPT/PDF (Office viewer toolbar may still allow save). Real prevention requires server-rendered thumbnails, which we can add later if needed.
+- Chapter master table — chapters remain free-text, deduped via existing rows in the combobox.
+- Touching/removing any NotebookLM, worker, or jobs code.

@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Trash2, Upload, Loader2, Sparkles, Globe, AlertTriangle } from "lucide-react";
+import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Trash2, Upload, Loader2, Sparkles, Globe, AlertTriangle, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useNotebookLMEnabled } from "@/hooks/useAppSettings";
 
 // Only outputs the worker actually produces. Other DB enum values exist
 // (slides_pdf, report_*, quiz_*, flashcards_html) but are intentionally hidden
@@ -32,6 +33,7 @@ export default function NotebookDetail() {
   const [picked, setPicked] = useState<string[]>(["slides_pptx", "flashcards_json"]);
   const [submitting, setSubmitting] = useState(false);
   const [workerOnline, setWorkerOnline] = useState<boolean | null>(null);
+  const { value: nblmEnabled } = useNotebookLMEnabled();
 
   useEffect(() => {
     if (id) load();
@@ -283,7 +285,13 @@ export default function NotebookDetail() {
                 </div>
               </label>
             ))}
-            {workerOnline === false && (
+            {!nblmEnabled && (
+              <div className="flex items-start gap-2 rounded-md border bg-muted p-3 text-xs">
+                <Lock className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>NotebookLM auto-generation is currently disabled by an admin.</span>
+              </div>
+            )}
+            {nblmEnabled && workerOnline === false && (
               <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <span>
@@ -295,7 +303,7 @@ export default function NotebookDetail() {
             <Button
               className="w-full bg-gradient-brand shadow-elegant"
               onClick={submitJob}
-              disabled={submitting || picked.length === 0}
+              disabled={submitting || picked.length === 0 || !nblmEnabled}
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Sparkles className="mr-2 h-4 w-4" />Queue job</>}
             </Button>
