@@ -386,6 +386,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_library_stats: {
+        Args: { _user_id: string }
+        Returns: {
+          mine: number
+          subjects: number
+          total: number
+        }[]
+      }
       get_my_status: {
         Args: never
         Returns: Database["public"]["Enums"]["user_status"]
@@ -398,6 +406,8 @@ export type Database = {
         Returns: boolean
       }
       is_approved: { Args: { _user_id: string }; Returns: boolean }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "developer"
