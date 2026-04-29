@@ -149,6 +149,27 @@ export default function Library() {
     [fClass]
   );
 
+  // Load chapter options for the chosen class + subject (used by the chapter dropdown filter)
+  const [chapterOptions, setChapterOptions] = useState<string[]>([]);
+  useEffect(() => {
+    if (fClass === "all" || fSubject === "all") {
+      setChapterOptions([]);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("chapters")
+        .select("name")
+        .eq("class_level", Number(fClass))
+        .eq("subject", fSubject)
+        .order("name", { ascending: true });
+      setChapterOptions(((data as { name: string }[]) ?? []).map((d) => d.name));
+    })();
+  }, [fClass, fSubject]);
+
+  // When the chapter dropdown is active, treat fChapter as an exact match instead of substring.
+  const useChapterDropdown = fClass !== "all" && fSubject !== "all";
+
   const reload = () => fetchPage(0, true);
 
   const remove = async (item: Item) => {
