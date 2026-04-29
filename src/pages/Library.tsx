@@ -219,7 +219,7 @@ export default function Library() {
 
       <Card className="mb-6">
         <CardContent className="p-4 grid md:grid-cols-5 gap-3">
-          <Select value={fClass} onValueChange={(v) => { setFClass(v); setFSubject("all"); }}>
+          <Select value={fClass} onValueChange={(v) => { setFClass(v); setFSubject("all"); setFChapter(""); }}>
             <SelectTrigger><SelectValue placeholder="Class" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All classes</SelectItem>
