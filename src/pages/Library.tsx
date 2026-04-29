@@ -226,7 +226,7 @@ export default function Library() {
               {CLASS_LEVELS.map((c) => <SelectItem key={c} value={String(c)}>Class {c}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={fSubject} onValueChange={setFSubject} disabled={fClass === "all"}>
+          <Select value={fSubject} onValueChange={(v) => { setFSubject(v); setFChapter(""); }} disabled={fClass === "all"}>
             <SelectTrigger><SelectValue placeholder="Subject" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All subjects</SelectItem>
