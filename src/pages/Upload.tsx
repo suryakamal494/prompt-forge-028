@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChapterCombobox } from "@/components/ChapterCombobox";
@@ -20,6 +21,7 @@ export default function Upload() {
   const [subject, setSubject] = useState<string>("");
   const [chapter, setChapter] = useState("");
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [contentType, setContentType] = useState<ContentType>("pptx");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -31,6 +33,10 @@ export default function Upload() {
     e.preventDefault();
     if (!user || !classLevel || !subject || !chapter.trim() || !title.trim() || !file) {
       toast.error("Please fill all fields and choose a file.");
+      return;
+    }
+    if (!description.trim()) {
+      toast.error("Please add a short TLDR describing this content.");
       return;
     }
     if (file.size > 50 * 1024 * 1024) {
@@ -60,6 +66,7 @@ export default function Upload() {
       subject,
       chapter: chapter.trim(),
       title: title.trim(),
+      description: description.trim(),
       content_type: contentType,
       storage_path: path,
       mime_type: file.type || null,
@@ -128,6 +135,18 @@ export default function Upload() {
             <div className="space-y-2">
               <Label>Title</Label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Light – Reflection deck" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>TLDR / Description</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Briefly summarize what this PPT/PDF covers — key topics, concepts, or learning outcomes."
+                rows={4}
+                maxLength={1000}
+              />
+              <p className="text-xs text-muted-foreground">{description.length}/1000 characters</p>
             </div>
 
             <div className="space-y-2">
