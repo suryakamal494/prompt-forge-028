@@ -224,9 +224,16 @@ export default function Library() {
         <div className="flex justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : items.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center py-16 text-muted-foreground">
+          <CardContent className="flex flex-col items-center py-16 text-muted-foreground text-center">
             <LibraryIcon className="h-10 w-10 mb-3" />
-            <p>No content matches these filters.</p>
+            <p className="mb-4">
+              {total === 0
+                ? "Your library is empty. Upload the first piece of content to get started."
+                : "No content matches these filters."}
+            </p>
+            <Button asChild className="bg-gradient-brand shadow-elegant">
+              <Link to="/upload"><Plus className="mr-2 h-4 w-4" />Upload content</Link>
+            </Button>
           </CardContent>
         </Card>
       ) : (

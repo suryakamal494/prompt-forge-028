@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChapterCombobox } from "@/components/ChapterCombobox";
-import { CLASS_LEVELS, CONTENT_TYPES, SUBJECTS_BY_CLASS, type ClassLevel, type ContentType } from "@/lib/curriculum";
+import { CLASS_LEVELS, CONTENT_TYPES, SUBJECTS_BY_CLASS, validateFileForContentType, type ClassLevel, type ContentType } from "@/lib/curriculum";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, Upload as UploadIcon } from "lucide-react";
@@ -35,6 +35,11 @@ export default function Upload() {
     }
     if (file.size > 50 * 1024 * 1024) {
       toast.error("File must be under 50 MB.");
+      return;
+    }
+    const typeErr = validateFileForContentType(file, contentType);
+    if (typeErr) {
+      toast.error(typeErr);
       return;
     }
     setSubmitting(true);
