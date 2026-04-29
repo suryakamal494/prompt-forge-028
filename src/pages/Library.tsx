@@ -189,7 +189,7 @@ export default function Library() {
             <TabsTrigger value="mine">Mine</TabsTrigger>
           </TabsList>
         </Tabs>
-        <Button variant="ghost" size="sm" onClick={load}><RefreshCw className="h-4 w-4 mr-1" />Refresh</Button>
+        <Button variant="ghost" size="sm" onClick={reload}><RefreshCw className="h-4 w-4 mr-1" />Refresh</Button>
       </div>
 
       <Card className="mb-6">
@@ -222,7 +222,7 @@ export default function Library() {
 
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-      ) : filtered.length === 0 ? (
+      ) : items.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center py-16 text-muted-foreground">
             <LibraryIcon className="h-10 w-10 mb-3" />
@@ -230,49 +230,68 @@ export default function Library() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((item) => {
-            const mine = item.owner_id === user?.id;
-            const canEdit = mine || isAdmin;
-            return (
-              <Card key={item.id} className="flex flex-col">
-                <CardContent className="p-5 flex-1 flex flex-col">
-                  <div className="flex items-start justify-between mb-2 gap-2">
-                    <Badge variant="secondary" className="capitalize">{CONTENT_TYPE_LABEL[item.content_type]}</Badge>
-                    {mine && <Badge variant="outline">Mine</Badge>}
-                  </div>
-                  <h3 className="font-serif text-lg leading-snug line-clamp-2 mb-1">{item.title}</h3>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Class {item.class_level} · {item.subject} · {item.chapter}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-auto">
-                    By {profiles[item.owner_id] ?? "—"} · {formatDistanceToNow(new Date(item.created_at))} ago
-                  </p>
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    <Button size="sm" variant="outline" onClick={() => setPreviewItem(item)}>
-                      <Eye className="h-4 w-4 mr-1" />Preview
-                    </Button>
-                    {canEdit && (
-                      <Button size="sm" variant="ghost" onClick={() => setEditItem(item)}>
-                        <Pencil className="h-4 w-4 mr-1" />Edit
+        <>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {items.map((item) => {
+              const mine = item.owner_id === user?.id;
+              const canEdit = mine || isAdmin;
+              return (
+                <Card key={item.id} className="flex flex-col">
+                  <CardContent className="p-5 flex-1 flex flex-col">
+                    <div className="flex items-start justify-between mb-2 gap-2">
+                      <Badge variant="secondary" className="capitalize">{CONTENT_TYPE_LABEL[item.content_type]}</Badge>
+                      {mine && <Badge variant="outline">Mine</Badge>}
+                    </div>
+                    <h3 className="font-serif text-lg leading-snug line-clamp-2 mb-1">{item.title}</h3>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Class {item.class_level} · {item.subject} · {item.chapter}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-auto">
+                      By {profiles[item.owner_id] ?? "—"} · {formatDistanceToNow(new Date(item.created_at))} ago
+                    </p>
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      <Button size="sm" variant="outline" onClick={() => setPreviewItem(item)}>
+                        <Eye className="h-4 w-4 mr-1" />Preview
                       </Button>
-                    )}
-                    {isAdmin && (
-                      <Button size="sm" variant="ghost" onClick={() => download(item)}>
-                        <Download className="h-4 w-4 mr-1" />Download
-                      </Button>
-                    )}
-                    {canEdit && (
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => remove(item)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                      {canEdit && (
+                        <Button size="sm" variant="ghost" onClick={() => setEditItem(item)}>
+                          <Pencil className="h-4 w-4 mr-1" />Edit
+                        </Button>
+                      )}
+                      {isAdmin && (
+                        <Button size="sm" variant="ghost" onClick={() => download(item)}>
+                          <Download className="h-4 w-4 mr-1" />Download
+                        </Button>
+                      )}
+                      {canEdit && (
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => remove(item)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <div ref={sentinelRef} className="h-10" />
+
+          <div className="flex flex-col items-center justify-center py-6 text-xs text-muted-foreground gap-2">
+            {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
+            {!hasMore && (
+              <span>
+                Showing all {items.length}
+                {total != null ? ` of ${total}` : ""} item{items.length === 1 ? "" : "s"}.
+              </span>
+            )}
+            {hasMore && !loadingMore && (
+              <Button variant="ghost" size="sm" onClick={() => fetchPage(items.length, false)}>
+                Load more
+              </Button>
+            )}
+          </div>
+        </>
       )}
 
       {previewItem && (
@@ -286,7 +305,7 @@ export default function Library() {
       )}
 
       {editItem && (
-        <EditDialog item={editItem} onClose={() => setEditItem(null)} onSaved={() => { setEditItem(null); load(); }} />
+        <EditDialog item={editItem} onClose={() => setEditItem(null)} onSaved={() => { setEditItem(null); reload(); }} />
       )}
     </AppLayout>
   );
