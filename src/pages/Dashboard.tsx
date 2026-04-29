@@ -14,23 +14,26 @@ export default function Dashboard() {
 
   useEffect(() => {
     document.title = "Dashboard — Workbench";
+    if (!user?.id) return;
     (async () => {
-      const [{ count: total }, { count: mine }, { data: subj }] = await Promise.all([
-        supabase.from("content_items").select("*", { count: "exact", head: true }),
-        supabase.from("content_items").select("*", { count: "exact", head: true }).eq("owner_id", user?.id ?? ""),
-        supabase.from("content_items").select("subject"),
-      ]);
-      const subjects = new Set((subj ?? []).map((s: any) => s.subject)).size;
-      setStats({ mine: mine ?? 0, total: total ?? 0, subjects });
+      const { data, error } = await supabase.rpc("get_library_stats", { _user_id: user.id });
+      if (!error && data && data.length > 0) {
+        const row = data[0] as { total: number; mine: number; subjects: number };
+        setStats({
+          total: Number(row.total) || 0,
+          mine: Number(row.mine) || 0,
+          subjects: Number(row.subjects) || 0,
+        });
+      }
     })();
   }, [user]);
 
   return (
     <AppLayout>
-      <div className="flex items-end justify-between mb-8">
+      <div className="flex items-end justify-between mb-8 flex-wrap gap-3">
         <div>
           <p className="text-sm text-muted-foreground mb-1">Welcome back</p>
-          <h1 className="font-serif text-4xl">{profile?.display_name ?? "Hi"}</h1>
+          <h1 className="font-serif text-3xl md:text-4xl">{profile?.display_name ?? "Hi"}</h1>
         </div>
         <Button asChild className="bg-gradient-brand shadow-elegant">
           <Link to="/upload"><Upload className="mr-2 h-4 w-4" /> Upload content</Link>
@@ -47,7 +50,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-3 gap-4 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
         <StatCard icon={Upload} label="My uploads" value={stats.mine} to="/library" />
         <StatCard icon={Library} label="Library total" value={stats.total} to="/library" />
         <StatCard icon={BookOpen} label="Subjects covered" value={stats.subjects} to="/library" />
@@ -81,7 +84,7 @@ export default function Dashboard() {
 
 function StatCard({ icon: Icon, label, value, to }: { icon: typeof Library; label: string; value: number; to: string }) {
   return (
-    <Link to={to} className="group">
+    <Link to={to} className="group block">
       <Card className="transition-all hover:shadow-elegant hover:-translate-y-0.5">
         <CardContent className="p-6 flex items-center justify-between">
           <div>
