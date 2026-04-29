@@ -22,3 +22,35 @@ export type ContentType = (typeof CONTENT_TYPES)[number]["value"];
 export const CONTENT_TYPE_LABEL: Record<ContentType, string> = Object.fromEntries(
   CONTENT_TYPES.map((c) => [c.value, c.label])
 ) as Record<ContentType, string>;
+
+// Validate that a chosen file matches the selected content type.
+// Returns null when valid, or a human-readable error message.
+export function validateFileForContentType(file: File, contentType: ContentType): string | null {
+  const name = file.name.toLowerCase();
+  const mime = (file.type || "").toLowerCase();
+  switch (contentType) {
+    case "pptx":
+      if (!name.endsWith(".pptx") && !mime.includes("presentationml.presentation")) {
+        return "Please choose a .pptx PowerPoint file.";
+      }
+      return null;
+    case "pdf":
+      if (!name.endsWith(".pdf") && mime !== "application/pdf") {
+        return "Please choose a .pdf file.";
+      }
+      return null;
+    case "flashcards_json":
+      if (!name.endsWith(".json") && mime !== "application/json") {
+        return "Please choose a .json flashcards file.";
+      }
+      return null;
+    case "image":
+      if (!mime.startsWith("image/") && !/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name)) {
+        return "Please choose an image file.";
+      }
+      return null;
+    case "other":
+    default:
+      return null;
+  }
+}
