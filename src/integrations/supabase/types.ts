@@ -72,6 +72,7 @@ export type Database = {
           class_level: number
           content_type: Database["public"]["Enums"]["content_kind"]
           created_at: string
+          description: string | null
           id: string
           mime_type: string | null
           owner_id: string
@@ -86,6 +87,7 @@ export type Database = {
           class_level: number
           content_type: Database["public"]["Enums"]["content_kind"]
           created_at?: string
+          description?: string | null
           id?: string
           mime_type?: string | null
           owner_id: string
@@ -100,6 +102,7 @@ export type Database = {
           class_level?: number
           content_type?: Database["public"]["Enums"]["content_kind"]
           created_at?: string
+          description?: string | null
           id?: string
           mime_type?: string | null
           owner_id?: string
