@@ -9,10 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, BookOpen, Loader2 } from "lucide-react";
+import { Plus, BookOpen, Loader2, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { useNotebookLMEnabled } from "@/hooks/useAppSettings";
 
 interface Notebook {
   id: string;
@@ -24,6 +25,7 @@ interface Notebook {
 
 export default function Notebooks() {
   const { user } = useAuth();
+  const { value: nblmEnabled } = useNotebookLMEnabled();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -72,8 +74,9 @@ export default function Notebooks() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-brand shadow-elegant">
-              <Plus className="mr-2 h-4 w-4" /> New notebook
+            <Button className="bg-gradient-brand shadow-elegant" disabled={!nblmEnabled}>
+              {nblmEnabled ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
+              New notebook
             </Button>
           </DialogTrigger>
           <DialogContent>
