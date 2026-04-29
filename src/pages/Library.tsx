@@ -79,7 +79,7 @@ export default function Library() {
     if (fClass !== "all") q = q.eq("class_level", Number(fClass));
     if (fSubject !== "all") q = q.eq("subject", fSubject);
     if (dChapter) q = q.ilike("chapter", `%${dChapter}%`);
-    if (fType !== "all") q = q.eq("content_type", fType);
+    if (fType !== "all") q = q.eq("content_type", fType as ContentType);
     if (dSearch) q = q.ilike("title", `%${dSearch}%`);
     return q;
   }, [tab, user, fClass, fSubject, dChapter, fType, dSearch]);
