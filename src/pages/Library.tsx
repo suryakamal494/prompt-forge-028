@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,11 +32,16 @@ interface Item {
   created_at: string;
 }
 
+const PAGE_SIZE = 24;
+
 export default function Library() {
   const { user, isAdmin } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState<number | null>(null);
   const [tab, setTab] = useState<"all" | "mine">("all");
 
   const [fClass, setFClass] = useState<string>("all");
@@ -45,42 +50,106 @@ export default function Library() {
   const [fType, setFType] = useState<string>("all");
   const [fSearch, setFSearch] = useState("");
 
+  // Debounced text filters so we don't re-query on every keystroke.
+  const [dChapter, setDChapter] = useState("");
+  const [dSearch, setDSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDChapter(fChapter.trim()), 300);
+    return () => clearTimeout(t);
+  }, [fChapter]);
+  useEffect(() => {
+    const t = setTimeout(() => setDSearch(fSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [fSearch]);
+
   const [previewItem, setPreviewItem] = useState<Item | null>(null);
   const [editItem, setEditItem] = useState<Item | null>(null);
 
   useEffect(() => {
     document.title = "Library — Workbench";
-    load();
   }, []);
 
-  const load = async () => {
-    setLoading(true);
-    const { data } = await supabase.from("content_items").select("*").order("created_at", { ascending: false });
-    const list = (data as Item[]) ?? [];
-    setItems(list);
-    const ownerIds = Array.from(new Set(list.map((i) => i.owner_id)));
-    if (ownerIds.length) {
-      const { data: profs } = await supabase.from("profiles").select("id,display_name,email").in("id", ownerIds);
-      const map: Record<string, string> = {};
-      (profs ?? []).forEach((p: any) => (map[p.id] = p.display_name || p.email));
-      setProfiles(map);
-    }
-    setLoading(false);
-  };
+  // Build a query with current filters; caller adds range + count.
+  const buildQuery = useCallback(() => {
+    let q = supabase
+      .from("content_items")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false });
+    if (tab === "mine" && user?.id) q = q.eq("owner_id", user.id);
+    if (fClass !== "all") q = q.eq("class_level", Number(fClass));
+    if (fSubject !== "all") q = q.eq("subject", fSubject);
+    if (dChapter) q = q.ilike("chapter", `%${dChapter}%`);
+    if (fType !== "all") q = q.eq("content_type", fType);
+    if (dSearch) q = q.ilike("title", `%${dSearch}%`);
+    return q;
+  }, [tab, user, fClass, fSubject, dChapter, fType, dSearch]);
 
-  const subjects = useMemo(() => (fClass !== "all" ? SUBJECTS_BY_CLASS[Number(fClass) as ClassLevel] : []), [fClass]);
+  const fetchPage = useCallback(
+    async (from: number, replace: boolean) => {
+      if (replace) setLoading(true);
+      else setLoadingMore(true);
+      const { data, count, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+      if (error) {
+        toast.error(error.message);
+        setLoading(false);
+        setLoadingMore(false);
+        return;
+      }
+      const list = (data as Item[]) ?? [];
+      setTotal(count ?? null);
+      setHasMore(list.length === PAGE_SIZE && (count == null || from + list.length < count));
+      setItems((prev) => (replace ? list : [...prev, ...list]));
 
-  const filtered = useMemo(() => {
-    return items.filter((i) => {
-      if (tab === "mine" && i.owner_id !== user?.id) return false;
-      if (fClass !== "all" && i.class_level !== Number(fClass)) return false;
-      if (fSubject !== "all" && i.subject !== fSubject) return false;
-      if (fChapter && !i.chapter.toLowerCase().includes(fChapter.toLowerCase())) return false;
-      if (fType !== "all" && i.content_type !== fType) return false;
-      if (fSearch && !i.title.toLowerCase().includes(fSearch.toLowerCase())) return false;
-      return true;
-    });
-  }, [items, tab, user, fClass, fSubject, fChapter, fType, fSearch]);
+      // Load any missing profile names.
+      const newOwnerIds = Array.from(new Set(list.map((i) => i.owner_id))).filter((id) => !profiles[id]);
+      if (newOwnerIds.length) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id,display_name,email")
+          .in("id", newOwnerIds);
+        if (profs) {
+          setProfiles((prev) => {
+            const next = { ...prev };
+            (profs as any[]).forEach((p) => (next[p.id] = p.display_name || p.email));
+            return next;
+          });
+        }
+      }
+      setLoading(false);
+      setLoadingMore(false);
+    },
+    [buildQuery, profiles]
+  );
+
+  // Reload from page 0 whenever filters change.
+  useEffect(() => {
+    fetchPage(0, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, fClass, fSubject, fType, dChapter, dSearch]);
+
+  // Infinite scroll sentinel.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loading && !loadingMore) {
+          fetchPage(items.length, false);
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [items.length, hasMore, loading, loadingMore, fetchPage]);
+
+  const subjects = useMemo(
+    () => (fClass !== "all" ? SUBJECTS_BY_CLASS[Number(fClass) as ClassLevel] : []),
+    [fClass]
+  );
+
+  const reload = () => fetchPage(0, true);
 
   const remove = async (item: Item) => {
     if (!confirm(`Delete "${item.title}"?`)) return;
@@ -89,7 +158,7 @@ export default function Library() {
     if (error) toast.error(error.message);
     else {
       toast.success("Deleted");
-      load();
+      reload();
     }
   };
 
