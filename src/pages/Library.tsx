@@ -78,7 +78,11 @@ export default function Library() {
     if (tab === "mine" && user?.id) q = q.eq("owner_id", user.id);
     if (fClass !== "all") q = q.eq("class_level", Number(fClass));
     if (fSubject !== "all") q = q.eq("subject", fSubject);
-    if (dChapter) q = q.ilike("chapter", `%${dChapter}%`);
+    if (dChapter) {
+      // Exact match when the dropdown is in use; substring search otherwise.
+      if (fClass !== "all" && fSubject !== "all") q = q.eq("chapter", dChapter);
+      else q = q.ilike("chapter", `%${dChapter}%`);
+    }
     if (fType !== "all") q = q.eq("content_type", fType as ContentType);
     if (dSearch) q = q.ilike("title", `%${dSearch}%`);
     return q;
@@ -149,6 +153,27 @@ export default function Library() {
     [fClass]
   );
 
+  // Load chapter options for the chosen class + subject (used by the chapter dropdown filter)
+  const [chapterOptions, setChapterOptions] = useState<string[]>([]);
+  useEffect(() => {
+    if (fClass === "all" || fSubject === "all") {
+      setChapterOptions([]);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("chapters")
+        .select("name")
+        .eq("class_level", Number(fClass))
+        .eq("subject", fSubject)
+        .order("name", { ascending: true });
+      setChapterOptions(((data as { name: string }[]) ?? []).map((d) => d.name));
+    })();
+  }, [fClass, fSubject]);
+
+  // When the chapter dropdown is active, treat fChapter as an exact match instead of substring.
+  const useChapterDropdown = fClass !== "all" && fSubject !== "all";
+
   const reload = () => fetchPage(0, true);
 
   const remove = async (item: Item) => {
@@ -194,21 +219,31 @@ export default function Library() {
 
       <Card className="mb-6">
         <CardContent className="p-4 grid md:grid-cols-5 gap-3">
-          <Select value={fClass} onValueChange={(v) => { setFClass(v); setFSubject("all"); }}>
+          <Select value={fClass} onValueChange={(v) => { setFClass(v); setFSubject("all"); setFChapter(""); }}>
             <SelectTrigger><SelectValue placeholder="Class" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All classes</SelectItem>
               {CLASS_LEVELS.map((c) => <SelectItem key={c} value={String(c)}>Class {c}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={fSubject} onValueChange={setFSubject} disabled={fClass === "all"}>
+          <Select value={fSubject} onValueChange={(v) => { setFSubject(v); setFChapter(""); }} disabled={fClass === "all"}>
             <SelectTrigger><SelectValue placeholder="Subject" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All subjects</SelectItem>
               {subjects.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Input placeholder="Chapter contains…" value={fChapter} onChange={(e) => setFChapter(e.target.value)} />
+          {useChapterDropdown ? (
+            <Select value={fChapter || "all"} onValueChange={(v) => setFChapter(v === "all" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Chapter" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All chapters</SelectItem>
+                {chapterOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input placeholder="Chapter contains…" value={fChapter} onChange={(e) => setFChapter(e.target.value)} />
+          )}
           <Select value={fType} onValueChange={setFType}>
             <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
             <SelectContent>

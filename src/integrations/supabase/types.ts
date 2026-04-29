@@ -35,6 +35,36 @@ export type Database = {
         }
         Relationships: []
       }
+      chapters: {
+        Row: {
+          class_level: number
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          class_level: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          class_level?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       content_items: {
         Row: {
           bytes: number | null
