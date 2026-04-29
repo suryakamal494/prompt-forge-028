@@ -6,23 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { BookOpen, ListChecks, Library, Plus, Sparkles } from "lucide-react";
+import { Library, Upload, Sparkles, BookOpen } from "lucide-react";
 
 export default function Dashboard() {
-  const { profile, isAdmin } = useAuth();
-  const [stats, setStats] = useState({ notebooks: 0, jobs: 0, outputs: 0 });
+  const { profile, isAdmin, user } = useAuth();
+  const [stats, setStats] = useState({ mine: 0, total: 0, subjects: 0 });
 
   useEffect(() => {
-    document.title = "Dashboard — NotebookLM Workbench";
+    document.title = "Dashboard — Workbench";
     (async () => {
-      const [{ count: nb }, { count: jb }, { count: out }] = await Promise.all([
-        supabase.from("notebooks").select("*", { count: "exact", head: true }),
-        supabase.from("jobs").select("*", { count: "exact", head: true }),
-        supabase.from("outputs").select("*", { count: "exact", head: true }),
+      const [{ count: total }, { count: mine }, { data: subj }] = await Promise.all([
+        supabase.from("content_items").select("*", { count: "exact", head: true }),
+        supabase.from("content_items").select("*", { count: "exact", head: true }).eq("owner_id", user?.id ?? ""),
+        supabase.from("content_items").select("subject"),
       ]);
-      setStats({ notebooks: nb ?? 0, jobs: jb ?? 0, outputs: out ?? 0 });
+      const subjects = new Set((subj ?? []).map((s: any) => s.subject)).size;
+      setStats({ mine: mine ?? 0, total: total ?? 0, subjects });
     })();
-  }, []);
+  }, [user]);
 
   return (
     <AppLayout>
@@ -32,9 +33,7 @@ export default function Dashboard() {
           <h1 className="font-serif text-4xl">{profile?.display_name ?? "Hi"}</h1>
         </div>
         <Button asChild className="bg-gradient-brand shadow-elegant">
-          <Link to="/notebooks">
-            <Plus className="mr-2 h-4 w-4" /> New notebook
-          </Link>
+          <Link to="/upload"><Upload className="mr-2 h-4 w-4" /> Upload content</Link>
         </Button>
       </div>
 
@@ -42,36 +41,36 @@ export default function Dashboard() {
         <div className="rounded-xl border bg-accent/40 p-4 mb-8 flex items-center gap-3">
           <Sparkles className="h-5 w-5 text-accent-foreground" />
           <div className="flex-1 text-sm">
-            You're signed in as the workspace administrator. Manage users and the worker from the sidebar.
+            You're signed in as the workspace administrator. Manage users, the worker, and feature flags from the sidebar.
           </div>
           <Badge variant="secondary">Admin</Badge>
         </div>
       )}
 
       <div className="grid md:grid-cols-3 gap-4 mb-10">
-        <StatCard icon={BookOpen} label="Notebooks" value={stats.notebooks} to="/notebooks" />
-        <StatCard icon={ListChecks} label="Jobs" value={stats.jobs} to="/jobs" />
-        <StatCard icon={Library} label="Outputs" value={stats.outputs} to="/library" />
+        <StatCard icon={Upload} label="My uploads" value={stats.mine} to="/library" />
+        <StatCard icon={Library} label="Library total" value={stats.total} to="/library" />
+        <StatCard icon={BookOpen} label="Subjects covered" value={stats.subjects} to="/library" />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-serif">Get started</CardTitle>
-          <CardDescription>Three steps to your first generated deck.</CardDescription>
+          <CardTitle className="font-serif">How it works</CardTitle>
+          <CardDescription>Three quick steps.</CardDescription>
         </CardHeader>
         <CardContent>
           <ol className="space-y-3 text-sm">
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">1</span>
-              <span><strong>Create a notebook</strong> and add your sources — PDFs, URLs, YouTube links, or pasted text.</span>
+              <span>Open <strong>Upload</strong>, pick the class, subject, chapter and title, then add the file.</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">2</span>
-              <span><strong>Pick outputs</strong> (slide deck, study guide, quiz, flashcards) and submit a generation job.</span>
+              <span>Browse the <strong>Library</strong> to see everyone's content. Preview is open to the team — only owners can edit and only admins can download.</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">3</span>
-              <span><strong>Download</strong> the artifacts — or publish the notebook to the team library.</span>
+              <span>Need to update something? Edit the metadata or replace the file from the library card.</span>
             </li>
           </ol>
         </CardContent>
@@ -80,7 +79,7 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, to }: { icon: typeof BookOpen; label: string; value: number; to: string }) {
+function StatCard({ icon: Icon, label, value, to }: { icon: typeof Library; label: string; value: number; to: string }) {
   return (
     <Link to={to} className="group">
       <Card className="transition-all hover:shadow-elegant hover:-translate-y-0.5">

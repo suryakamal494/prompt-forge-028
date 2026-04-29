@@ -13,11 +13,13 @@ import Dashboard from "./pages/Dashboard";
 import Notebooks from "./pages/Notebooks";
 import NotebookDetail from "./pages/NotebookDetail";
 import Jobs from "./pages/Jobs";
-import LibraryPage from "./pages/LibraryPage";
+import Library from "./pages/Library";
+import Upload from "./pages/Upload";
 import Account from "./pages/Account";
 import Approvals from "./pages/admin/Approvals";
 import UsersAdmin from "./pages/admin/Users";
 import WorkerAdmin from "./pages/admin/Worker";
+import Settings from "./pages/admin/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,15 +37,19 @@ const App = () => (
             <Route path="/pending" element={<Pending />} />
 
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/library" element={<ProtectedRoute><Library /></ProtectedRoute>} />
+            <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
+            <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+
+            {/* NotebookLM (kept; visibility toggled via admin settings) */}
             <Route path="/notebooks" element={<ProtectedRoute><Notebooks /></ProtectedRoute>} />
             <Route path="/notebooks/:id" element={<ProtectedRoute><NotebookDetail /></ProtectedRoute>} />
             <Route path="/jobs" element={<ProtectedRoute><Jobs /></ProtectedRoute>} />
-            <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
-            <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
 
             <Route path="/admin/approvals" element={<ProtectedRoute requireAdmin><Approvals /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute requireAdmin><UsersAdmin /></ProtectedRoute>} />
             <Route path="/admin/worker" element={<ProtectedRoute requireAdmin><WorkerAdmin /></ProtectedRoute>} />
+            <Route path="/admin/settings" element={<ProtectedRoute requireAdmin><Settings /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
